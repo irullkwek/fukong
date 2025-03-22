@@ -1,0 +1,42 @@
+$ cat > plugins/own-backup.js << EOF
+import fs from 'fs';
+import archiver from 'archiver';
+
+let handler = async (m, { conn }) => {
+  
+  if (global.conn.user.jid !== conn.user.jid) return;
+
+  conn.sendMessage(m.chat, { react: { text: '💖', key: m.key } });
+
+  let backupZip = 'backup.zip';
+  const output = fs.createWriteStream(backupZip);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  archive.pipe(output);
+  archive.glob('**/*', {
+    ignore: ['node_modules/**', 'backup.zip', 'session/**', 'tmp/**']
+  });
+
+  output.on('close', async () => {
+    let size = (archive.pointer() / 1024 / 1024).toFixed(2) + ' MB';
+    let caption = \`Backup selesai. Ukuran: \${size}\`;
+    
+    console.log(caption);
+    await conn.sendFile(m.chat, backupZip, backupZip, caption);
+    fs.unlinkSync(backupZip);
+  });
+
+  archive.on('error', err => {
+    console.error('Backup gagal:', err);
+  });
+
+  await archive.finalize();
+};
+
+handler.help = ['backup'];
+handler.tags = ['owner'];
+handler.command = /^(backup)$/i;
+handler.rowner = true;
+
+export default handler;
+EOF
